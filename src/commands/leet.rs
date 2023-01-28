@@ -1,46 +1,25 @@
-use serenity::builder::CreateApplicationCommand;
-use serenity::model::prelude::command::CommandOptionType;
-use serenity::model::prelude::interaction::application_command::{
-    CommandDataOption, CommandDataOptionValue,
-};
+use crate::{Context, Error};
+use poise::serenity_prelude as serenity;
+use std::env;
 
-pub fn run(options: &[CommandDataOption]) -> String {
-    let option = options
-        .get(0)
-        .expect("Expected snowflake option")
-        .resolved
-        .as_ref()
-        .expect("Expected snowflake");
-
-    if let CommandDataOptionValue::String(snowflake) = option {
-        if !snowflake.parse::<i64>().is_ok() {
-            return "That doesn't look like a snowflake. Snowflakes contain only numbers."
-                .to_string();
-        }
-        let snowflake_parsed = snowflake.parse::<i64>().unwrap();
-
-        if snowflake_parsed < 4194304 {
-            return "That doesn't look like a snowflake. Snowflakes are much larger numbers."
-                .to_string();
-        }
-        format!(
-            "<t:{}>",
-            (snowflake_parsed / 4194304 + 1420070400000) / 1000
+#[poise::command(context_menu_command = "Leet")]
+pub async fn leet(
+    _ctx: Context<'_>,
+    #[description = "Discord profile to query information about"] message: serenity::Message,
+) -> Result<(), Error> {
+    let http = serenity::Http::new(
+        &env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in environment"),
+    );
+    message
+        .reply(
+            http,
+            format!(
+                "<t:{}>",
+                (*message.id.as_u64() / 4194304 + 1420070400000) / 1000
+            ),
         )
-    } else {
-        "Please provide a valid snowflake".to_string()
-    }
-}
-
-pub fn register(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
-    command
-        .name("leet")
-        .description("Get a timestamp for snowflake")
-        .create_option(|option| {
-            option
-                .name("snowflake")
-                .description("The snowflake (id) of the message")
-                .kind(CommandOptionType::String)
-                .required(true)
-        })
+        .await?;
+    _ctx.defer_ephemeral().await?;
+    _ctx.say("Executed command".to_string()).await?;
+    Ok(())
 }
