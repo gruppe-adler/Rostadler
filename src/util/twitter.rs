@@ -1,7 +1,4 @@
-use std::env;
-
 use regex::Regex;
-use serenity::http::Http;
 use serenity::model::prelude::ChannelId;
 use serenity::model::prelude::Message;
 use serenity::model::webhook::Webhook;
@@ -13,9 +10,7 @@ pub async fn twitter_link_replace(ctx: &Context, msg: &Message) {
         let author_name = msg.author.name.clone();
         let avatar_url = msg.author.avatar_url().unwrap();
         let new_content = re.replace(&msg.content, "https://vxtwitter.com");
-        let http =
-            Http::new(&env::var("DISCORD_TOKEN").expect("Expected TWITTER_WEBHOOK in environment"));
-        let webhooks = ChannelId::webhooks(msg.channel_id, &http)
+        let webhooks = ChannelId::webhooks(msg.channel_id, &ctx.http)
             .await
             .expect("Failed to fetch webhooks");
         let found_webhook = async {
@@ -36,11 +31,11 @@ pub async fn twitter_link_replace(ctx: &Context, msg: &Message) {
         };
 
         msg.delete(&ctx).await.unwrap();
-        let webhook = Webhook::from_url(&http, found_webhook.await.url().unwrap().as_str())
+        let webhook = Webhook::from_url(&ctx.http, found_webhook.await.url().unwrap().as_str())
             .await
             .expect("Webhook error");
         webhook
-            .execute(&http, false, |w| {
+            .execute(&ctx.http, false, |w| {
                 w.content(new_content)
                     .username(author_name)
                     .avatar_url(avatar_url)

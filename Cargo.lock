@@ -34,9 +34,9 @@ checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 
 [[package]]
 name = "async-trait"
-version = "0.1.58"
+version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e805d94e6b5001b651426cf4cd446b1ab5f319d27bab5c644f61de0a804360c"
+checksum = "1cd7fce9ba8c3c042128ce72d8b2ddbf3a05747efb67ea0313c635e10bda47a2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -957,6 +957,7 @@ name = "rostadler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "dotenv",
  "poise",
@@ -965,6 +966,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "ts3",
 ]
 
 [[package]]
@@ -1385,6 +1387,29 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "ts3"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c2eb37fbe3afaf12bec8ba4a68231e39358e6266e866668763258a0cd7c3c15"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "tokio",
+ "ts3_derive",
+]
+
+[[package]]
+name = "ts3_derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9135131cac535237814f4219b000c389e4eefc58cdaa0a3070a0572d14c79c15"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "tungstenite"

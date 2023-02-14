@@ -1,7 +1,7 @@
 use crate::{Context, Error};
 use poise::serenity_prelude::{
-    ChannelId, GuildChannel, Http, PermissionOverwrite, PermissionOverwriteType, Permissions,
-    RoleId,
+    CacheHttp, ChannelId, GuildChannel, Http, PermissionOverwrite, PermissionOverwriteType,
+    Permissions, RoleId,
 };
 use std::env;
 
@@ -95,11 +95,9 @@ pub async fn create(
 
 #[poise::command(slash_command)]
 pub async fn archive(
-    _ctx: Context<'_>,
+    ctx: Context<'_>,
     #[description = "The channel that you want to archive"] mut channel: GuildChannel,
 ) -> Result<(), Error> {
-    let http =
-        Http::new(&env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in environment"));
     let offtopic_archive_category_id = env::var("OFFTOPIC_ARCHIVE_CATEGORY_ID")
         .expect("Expected OFFTOPIC_ARCHIVE_CATEGORY_ID in the environment")
         .parse::<u64>()
@@ -108,7 +106,7 @@ pub async fn archive(
     // TODO check if channel is already in the archive / check if channel is offtopic channel
 
     channel
-        .edit(http, |c| {
+        .edit(&ctx.http(), |c| {
             c.category(ChannelId(offtopic_archive_category_id))
         })
         .await?;
@@ -117,11 +115,9 @@ pub async fn archive(
 
 #[poise::command(slash_command)]
 pub async fn unarchive(
-    _ctx: Context<'_>,
+    ctx: Context<'_>,
     #[description = "The channel that you want to unarchive"] mut channel: GuildChannel,
 ) -> Result<(), Error> {
-    let http =
-        Http::new(&env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in environment"));
     let offtopic_category_id = env::var("OFFTOPIC_CATEGORY_ID")
         .expect("Expected OFFTOPIC_CATEGORY_ID in the environment")
         .parse::<u64>()
@@ -130,7 +126,7 @@ pub async fn unarchive(
     // TODO check if channel is currently archived
 
     channel
-        .edit(http, |c| c.category(ChannelId(offtopic_category_id)))
+        .edit(&ctx.http(), |c| c.category(ChannelId(offtopic_category_id)))
         .await?;
     Ok(())
 }
@@ -142,11 +138,9 @@ pub async fn order(ctx: Context<'_>) -> Result<(), Error> {
         .parse::<u64>()
         .expect("Failed to parse OFFTOPIC_CATEGORY_ID to u64");
 
-    let http =
-        Http::new(&env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in environment"));
     let mut offtopic_channels = Vec::new();
     if let Some(guild_id) = ctx.guild_id() {
-        for channel in guild_id.channels(&http).await? {
+        for channel in guild_id.channels(&ctx.http()).await? {
             if let Some(channel_parent_id) = channel.1.parent_id {
                 if channel_parent_id.0 == offtopic_category_id {
                     offtopic_channels.push(channel);
@@ -157,7 +151,7 @@ pub async fn order(ctx: Context<'_>) -> Result<(), Error> {
         for (pos, mut channel) in offtopic_channels.into_iter().enumerate() {
             channel
                 .1
-                .edit(&http, |c| {
+                .edit(&ctx.http(), |c| {
                     c.position(pos.try_into().expect("Failed to convert channel index"))
                 })
                 .await?;

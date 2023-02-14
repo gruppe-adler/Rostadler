@@ -26,5 +26,7 @@ async fn ready(
     _framework: poise::FrameworkContext<'_, Data, Error>,
 ) -> Result<(), Error> {
     println!("{} is connected!", data.user.name);
+
+    // let ts_client = Ts3Service::new().await;
     Ok(())
 }
