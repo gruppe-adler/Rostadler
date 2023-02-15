@@ -10,8 +10,9 @@ pub async fn leet(
         .reply(
             ctx.http(),
             format!(
-                "<t:{}>",
-                (*message.id.as_u64() / 4194304 + 1420070400000) / 1000
+                "<t:{}> (message link: {})",
+                (*message.id.as_u64() / 4194304 + 1420070400000) / 1000,
+                message.link()
             ),
         )
         .await?;
