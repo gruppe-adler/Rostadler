@@ -1,12 +1,15 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use dotenv::dotenv;
-use poise::serenity_prelude::{user, CacheHttp, ChannelId, Context};
+use dotenvy::dotenv;
+use poise::serenity_prelude::{CacheHttp, Context};
+use serenity::all::CreateMessage;
 use std::{collections::HashMap, env, sync::Arc};
 use tokio::sync::Mutex;
 use ts3::{
-    event::{ClientEnterView, ClientLeftView},
-    Client, CommandBuilder, Decode, EventHandler,
+    event::{ClientEnterView, ClientLeftView, EventHandler},
+    request::RequestBuilder,
+    shared::{list::Comma, List, ServerId},
+    Client, Decode,
 };
 
 use crate::Error;
@@ -31,7 +34,7 @@ impl TSUser {
     }
 }
 
-#[derive(Default, Decode, Debug)]
+#[derive(Default, Decode, Debug, Clone)]
 pub struct TSChannel {
     pub cid: u16,
     pub channel_name: String,
@@ -51,7 +54,7 @@ impl EventHandler for Handler {
         dotenv().ok();
         // println!("Client {:?} joined!", event);
         let mut users = self.users.lock().await;
-        let user = self.service.get_client(event.clid).await.unwrap();
+        let user = self.service.get_client(event.clid.0).await.unwrap();
         users.insert(user.clid, user.clone());
         // users.insert(event.clid, v)
         if event.client_type != 1 {
@@ -62,7 +65,8 @@ impl EventHandler for Handler {
                     env::var("TS3_CHANNEL")
                         .expect("Expected TS3_HOST in the environment")
                         .parse::<u64>()
-                        .unwrap(),
+                        .unwrap()
+                        .into(),
                 )
                 .await
                 .unwrap();
@@ -76,21 +80,20 @@ impl EventHandler for Handler {
                 let emoji_join =
                     env::var("TS3_JOIN_EMOJI").expect("Expected TS3_JOIN_EMOJI in the environment");
 
+                let m = CreateMessage::new().content(format!(
+                    ":{}: **{}** joined",
+                    emoji_join, event.client_nickname
+                ));
                 guild_channel
-                    .send_message(self.discord_ctx.http(), |m| {
-                        m.content(format!(
-                            ":{}: **{}** joined",
-                            emoji_join, event.client_nickname
-                        ))
-                    })
+                    .send_message(self.discord_ctx.http(), m)
                     .await
                     .unwrap();
 
                 if user.is_new_user().await.unwrap() {
+                    let m = CreateMessage::new()
+                        .content(format!("@here {} joined", event.client_nickname));
                     guild_channel
-                        .send_message(self.discord_ctx.http(), |m| {
-                            m.content(format!("@here {} joined", event.client_nickname))
-                        })
+                        .send_message(self.discord_ctx.http(), m)
                         .await
                         .unwrap();
                 }
@@ -107,7 +110,8 @@ impl EventHandler for Handler {
                 env::var("TS3_CHANNEL")
                     .expect("Expected TS3_HOST in the environment")
                     .parse::<u64>()
-                    .unwrap(),
+                    .unwrap()
+                    .into(),
             )
             .await
             .unwrap();
@@ -145,7 +149,7 @@ impl Ts3Service {
     pub async fn new(discord_ctx: Context) -> Self {
         dotenv().ok();
         let ts3_host = env::var("TS3_HOST").expect("Expected TS3_HOST in the environment");
-        let client = Client::new(ts3_host).await.unwrap();
+        let client = Client::connect(ts3_host).await.unwrap();
         let users = Arc::new(Mutex::new(HashMap::new()));
         let channels = Arc::new(Mutex::new(HashMap::new()));
         Self {
@@ -163,10 +167,8 @@ impl Ts3Service {
             env::var("TS3_PASSWORD").expect("Expected TS3_PASSWORD in the environment");
         let ts3_sid = env::var("TS3_SID").expect("Expected TS3_SID in the environment");
 
-        self.client
-            .use_sid(ts3_sid.parse::<usize>().unwrap())
-            .await
-            .unwrap();
+        let server_id: ServerId = ts3_sid.parse::<u64>().unwrap().into();
+        self.client.use_sid(server_id).await.unwrap();
         self.client.login(&ts3_user, &ts3_password).await.unwrap();
         self.client.set_event_handler(Handler {
             discord_ctx: self.discord_ctx.clone(),
@@ -175,7 +177,7 @@ impl Ts3Service {
             service: self.clone(),
         });
         self.client
-            .servernotifyregister(ts3::client::ServerNotifyRegister::Server)
+            .servernotifyregister(ts3::request::ServerNotifyRegister::Server)
             .await
             .unwrap();
 
@@ -201,28 +203,26 @@ impl Ts3Service {
     }
 
     pub async fn get_clients(&self) -> Result<Vec<TSUser>, Error> {
-        let cmd = CommandBuilder::new("clientlist")
+        let cmd = RequestBuilder::new("clientlist")
             .arg("-info", "")
             .arg("-times", "")
-            .into_inner();
-        let clients: Vec<TSUser> = self.client.send(cmd).await?;
+            .build();
+        let clients: List<TSUser, Comma> = self.client.send(cmd).await?;
         // dbg!(&clients);
-        Ok(clients)
+        Ok(clients.iter().cloned().collect())
     }
 
     pub async fn get_channels(&self) -> Result<Vec<TSChannel>, Error> {
-        let channels: Vec<TSChannel> = self
+        let channels: List<TSChannel, Comma> = self
             .client
-            .send(CommandBuilder::new("channellist").into_inner())
+            .send(RequestBuilder::new("channellist").build())
             .await?;
         // dbg!(channels);
-        Ok(channels)
+        Ok(channels.iter().cloned().collect())
     }
 
     pub async fn get_client(&self, clid: u64) -> Result<TSUser, Error> {
-        let cmd = CommandBuilder::new("clientinfo")
-            .arg("clid", clid)
-            .into_inner();
+        let cmd = RequestBuilder::new("clientinfo").arg("clid", clid).build();
         let user: TSUser = self.client.send(cmd).await?;
         Ok(user)
     }

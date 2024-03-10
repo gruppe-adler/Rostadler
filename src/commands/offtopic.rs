@@ -1,8 +1,8 @@
 use crate::{Context, Error};
 use poise::serenity_prelude::{
-    CacheHttp, ChannelId, GuildChannel, Http, PermissionOverwrite, PermissionOverwriteType,
-    Permissions, RoleId,
+    GuildChannel, Http, PermissionOverwrite, PermissionOverwriteType, Permissions,
 };
+use serenity::all::{CreateChannel, EditChannel, EditRole};
 use std::env;
 
 #[poise::command(slash_command, subcommands("create", "archive", "unarchive", "order"))]
@@ -46,7 +46,7 @@ pub async fn create(
             Http::new(&env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in environment"));
 
         if let Some(guild_id) = ctx.guild_id() {
-            let guild = http.get_guild(guild_id.0).await?;
+            let guild = http.get_guild(guild_id).await?;
             let permission_name = match data.role_name {
                 Some(role_name) => role_name,
                 None => data.channel_name.clone(),
@@ -57,34 +57,32 @@ pub async fn create(
                 None => "".to_string(),
             };
 
-            let role = guild
-                .create_role(&http, |role| role.name(permission_name))
-                .await?;
+            let r = EditRole::new().name(permission_name);
+            let role = guild.create_role(&http, r).await?;
 
-            guild
-                .create_channel(&http, |channel| {
-                    channel
-                        .name(data.channel_name)
-                        .category(
-                            offtopic_category_id
-                                .parse::<u64>()
-                                .expect("Failed to parse offtopic category id"),
-                        )
-                        .topic(topic)
-                        .permissions(vec![
-                            PermissionOverwrite {
-                                allow: Permissions::VIEW_CHANNEL,
-                                deny: Permissions::empty(),
-                                kind: PermissionOverwriteType::Role(role.id),
-                            },
-                            PermissionOverwrite {
-                                allow: Permissions::empty(),
-                                deny: Permissions::VIEW_CHANNEL,
-                                kind: PermissionOverwriteType::Role(RoleId(guild_id.0)),
-                            },
-                        ])
-                })
-                .await?;
+            //let guild_role_id: poise::serenity_prelude::model::id::RoleId = gui
+            let guild_role_id: u64 = guild_id.into();
+
+            let c = CreateChannel::new(data.channel_name)
+                .category(
+                    offtopic_category_id
+                        .parse::<u64>()
+                        .expect("Failed to parse offtopic category id"),
+                )
+                .topic(topic)
+                .permissions(vec![
+                    PermissionOverwrite {
+                        allow: Permissions::VIEW_CHANNEL,
+                        deny: Permissions::empty(),
+                        kind: PermissionOverwriteType::Role(role.id),
+                    },
+                    PermissionOverwrite {
+                        allow: Permissions::empty(),
+                        deny: Permissions::VIEW_CHANNEL,
+                        kind: PermissionOverwriteType::Role(guild_role_id.into()),
+                    },
+                ]);
+            guild.create_channel(&http, c).await?;
 
             ctx.say("Viel Spaß mit deinem Channel!").await?;
         }
@@ -105,11 +103,8 @@ pub async fn archive(
 
     // TODO check if channel is already in the archive / check if channel is offtopic channel
 
-    channel
-        .edit(&ctx.http(), |c| {
-            c.category(ChannelId(offtopic_archive_category_id))
-        })
-        .await?;
+    let c = EditChannel::new().category(Some(offtopic_archive_category_id.into()));
+    channel.edit(&ctx.http(), c).await?;
     Ok(())
 }
 
@@ -124,10 +119,8 @@ pub async fn unarchive(
         .expect("Failed to parse OFFTOPIC_CATEGORY_ID to u64");
 
     // TODO check if channel is currently archived
-
-    channel
-        .edit(&ctx.http(), |c| c.category(ChannelId(offtopic_category_id)))
-        .await?;
+    let c = EditChannel::new().category(Some(offtopic_category_id.into()));
+    channel.edit(&ctx.http(), c).await?;
     Ok(())
 }
 
@@ -142,19 +135,16 @@ pub async fn order(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(guild_id) = ctx.guild_id() {
         for channel in guild_id.channels(&ctx.http()).await? {
             if let Some(channel_parent_id) = channel.1.parent_id {
-                if channel_parent_id.0 == offtopic_category_id {
+                if channel_parent_id == offtopic_category_id {
                     offtopic_channels.push(channel);
                 }
             }
         }
         offtopic_channels.sort_by(|a, b| a.1.name.cmp(&b.1.name));
         for (pos, mut channel) in offtopic_channels.into_iter().enumerate() {
-            channel
-                .1
-                .edit(&ctx.http(), |c| {
-                    c.position(pos.try_into().expect("Failed to convert channel index"))
-                })
-                .await?;
+            let c = EditChannel::new()
+                .position(pos.try_into().expect("Failed to convert channel index"));
+            channel.1.edit(&ctx.http(), c).await?;
         }
     }
 

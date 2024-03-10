@@ -1,7 +1,8 @@
 mod commands;
 use commands::*;
 mod util;
-use dotenv::dotenv;
+use ::serenity::all::ClientBuilder;
+use dotenvy::dotenv;
 use std::{collections::HashSet, env, sync::Arc};
 use tracing::warn;
 use util::teamspeak::Ts3Service;
@@ -24,18 +25,16 @@ async fn main() {
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
     let owners_string = env::var("OWNERS").expect("Expected owners in the environment");
 
+    let intents =
+        serenity::GatewayIntents::MESSAGE_CONTENT | serenity::GatewayIntents::GUILD_MESSAGES;
+
     let owners = owners_string
-        .split(",")
-        .into_iter()
-        .map(|o| serenity::UserId(o.parse::<u64>().expect("Failed to parse owner")))
+        .split(',')
+        .map(|o| o.parse::<u64>().expect("Failed to parse owner").into())
         .collect::<HashSet<serenity::UserId>>();
 
     // Build our client.
-    let client = poise::Framework::builder()
-        .token(token)
-        .intents(
-            serenity::GatewayIntents::MESSAGE_CONTENT | serenity::GatewayIntents::GUILD_MESSAGES,
-        )
+    let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             event_handler: |_ctx, event, _framework, _data| {
                 Box::pin(events::event_listener(_ctx, event, _framework, _data))
@@ -66,11 +65,14 @@ async fn main() {
                 Ok(data)
             })
         })
-        .build()
+        .build();
+
+    let mut client = ClientBuilder::new(token, intents)
+        .framework(framework)
         .await
         .expect("Error creating client");
 
-    let shard_manager = client.shard_manager().clone();
+    let shard_manager = client.shard_manager.clone();
     tokio::spawn(async move {
         #[cfg(unix)]
         {
@@ -102,7 +104,7 @@ async fn main() {
         }
 
         warn!("Recieved control C and shutting down.");
-        shard_manager.lock().await.shutdown_all().await;
+        shard_manager.shutdown_all().await;
     });
 
     if let Err(why) = client.start_autosharded().await {
